@@ -12,7 +12,11 @@ $PLB -c "Set :CFBundleVersion $NEW_VERSION" "$PLIST"
 $PLB -c "Set :CFBundleShortVersionString $NEW_VERSION_STRING" $PLIST
 
 # Build
-xcodebuild clean build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+# Helper first: SimSim copies SimSimHelper.app into LoginItems but doesn't build it.
+# Clean up front, since cleaning SimSim also removes the helper's product.
+rm -rf ./build
+xcodebuild -target SimSimHelper build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+xcodebuild -target SimSim build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
 
 # DMG
 ./Release/dmg/build.sh 
