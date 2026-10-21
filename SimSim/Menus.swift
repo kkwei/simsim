@@ -125,9 +125,19 @@ class Menus: NSObject
     }
     
     //----------------------------------------------------------------------------
-    class func add(_ application: Application, to menu: NSMenu)
+    class func title(for application: Application) -> String
     {
-        let title = "\(application.bundleName ?? "nil") \(application.version ?? "nil")"
+        return "\(application.bundleName ?? "nil") \(application.version ?? "nil")"
+    }
+
+    //----------------------------------------------------------------------------
+    class func add(_ application: Application, to menu: NSMenu, showingBundleIdentifier: Bool = false)
+    {
+        var title = Menus.title(for: application)
+        if showingBundleIdentifier
+        {
+            title += " (\(application.bundleIdentifier))"
+        }
         // This path will be opened on click
         let applicationContentPath = application.contentPath
         let item = NSMenuItem(title: title, action: #selector(Actions.openIn(withModifier:)), keyEquivalent: "\0")
@@ -141,9 +151,12 @@ class Menus: NSObject
     //----------------------------------------------------------------------------
     class func add(_ applications: [Application], to menu: NSMenu)
     {
+        // 同一台模擬器上名稱 + 版號重複時(例如 debug/beta/正式版)才附 bundle id 區分
+        let titleCounts = Dictionary(applications.map { (title(for: $0), 1) }, uniquingKeysWith: +)
+
         for application in applications
         {
-            add(application, to: menu)
+            add(application, to: menu, showingBundleIdentifier: titleCounts[title(for: application), default: 0] > 1)
         }
     }
 
