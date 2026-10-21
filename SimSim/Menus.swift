@@ -24,7 +24,7 @@ class Menus: NSObject
         item.target = Actions.self
         item.representedObject = path
         
-        item.image = Menus.fileIcon(forPath: iconPath)
+        Menus.setImage(Menus.fileIcon(forPath: iconPath), for: item)
 
         submenu.addItem(item)
         
@@ -43,6 +43,17 @@ class Menus: NSObject
         
         submenu.addItem(item)
         return NSNumber(value: hotkey.intValue + 1)
+    }
+
+    //----------------------------------------------------------------------------
+    // macOS 27 起選單 icon 預設由系統決定且通常會隱藏，要明確設 visible 才會顯示
+    class func setImage(_ image: NSImage?, for item: NSMenuItem)
+    {
+        item.image = image
+        if #available(macOS 27.0, *)
+        {
+            item.preferredImageVisibility = .visible
+        }
     }
 
     private static var fileIconCache: [String: (modificationDate: Date?, icon: NSImage)] = [:]
@@ -143,7 +154,7 @@ class Menus: NSObject
         let item = NSMenuItem(title: title, action: #selector(Actions.openIn(withModifier:)), keyEquivalent: "\0")
         item.target = Actions.self
         item.representedObject = applicationContentPath
-        item.image = application.icon
+        Menus.setImage(application.icon, for: item)
         self.addSubMenus(to: item, usingPath: applicationContentPath)
         menu.addItem(item)
     }

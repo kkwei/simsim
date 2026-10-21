@@ -50,7 +50,7 @@ class Realm: NSObject
             // There is exactly one realm file
             item = NSMenuItem(title: "Realm Studio", action: #selector(Realm.openRealmFile(_:)), keyEquivalent: "\(hotkey)")
             item.representedObject = aPath
-            item.image = icon
+            Menus.setImage(icon, for: item)
             item.target = self
             
             item.representedObject = (files.firstObject as! RealmFile).fullPath()
@@ -60,8 +60,8 @@ class Realm: NSObject
             // There is more than one realm file
             item = NSMenuItem(title: "Realm Studio", action: nil, keyEquivalent: "\(hotkey)")
             item.representedObject = aPath
-            item.image = icon
-            
+            Menus.setImage(icon, for: item)
+
             let menuRealm = NSMenu(title: "Realm Studio")
             menuRealm.autoenablesItems = false
             
