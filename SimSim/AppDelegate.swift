@@ -56,6 +56,11 @@ extension AppDelegate: NSApplicationDelegate
         statusItem = item
 
         killSimSimHelperIfNeeded()
+
+        DispatchQueue.global(qos: .utility).async
+        {
+            Tools.preloadIdentifierCache()
+        }
     }
 }
 

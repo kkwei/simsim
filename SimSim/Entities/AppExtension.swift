@@ -36,19 +36,11 @@ class AppExtension
         
         let path = simulator.pathForAppExtension(withUUID: uuid)
         
-        let plistPath = path + ".com.apple.mobile_container_manager.metadata.plist"
-        guard let plistData = try? Data(contentsOf: URL(fileURLWithPath: plistPath)) else
+        guard let identifier = Tools.containerIdentifier(uuid: uuid, atPath: path) else
         {
             return nil
         }
-        
-        guard let metadataPlist = try? PropertyListSerialization.propertyList(from: plistData, options: [], format: nil) as? [String: Any] else
-        {
-            return nil
-        }
-        
-        let identifier = metadataPlist["MCMMetadataIdentifier"] as! String
-        
+
         self.init(uuid: uuid, path: path, identifier: identifier)
     }
 }

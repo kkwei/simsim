@@ -11,20 +11,27 @@ struct Application
     private(set) var version: String? = nil
     private(set) var icon: NSImage? = nil
     let contentPath: String
-    private let properties: NSDictionary
+    private let identifier: String
     
     //----------------------------------------------------------------------------
     init?(dictionary: NSDictionary, simulator: Simulator)
     {
         self.uuid = Tools.getName(from: dictionary) as String
         
-        guard let (contentPath, properties) = Application.getApplicationProperties(byUUID: uuid, rootPath: simulator.path) else
+        let contentPath = Application.applicationRootPath(byUUID: uuid, rootPath: simulator.path)
+
+        guard let identifier = Tools.containerIdentifier(uuid: uuid, atPath: contentPath) else
         {
             return nil
         }
 
         self.contentPath = contentPath
-        self.properties = properties
+        self.identifier = identifier
+
+        guard !isAppleApplication else
+        {
+            return nil
+        }
         
         buildMetadata(forBundle: self.bundleIdentifier, rootPath: simulator.path)
     }
@@ -38,7 +45,7 @@ struct Application
     //----------------------------------------------------------------------------
     var bundleIdentifier: String
     {
-        return properties["MCMMetadataIdentifier"] as? String ?? "unknown.bundle.identifier"
+        return identifier
     }
     
     // MARK: - Private
@@ -46,21 +53,6 @@ struct Application
     private static func applicationRootPath(byUUID uuid: String, rootPath: String) -> String
     {
         return rootPath.appendingFormat("data/Containers/Data/Application/%@/", uuid)
-    }
-    
-    //----------------------------------------------------------------------------
-    private static func getApplicationProperties(byUUID uuid: String, rootPath: String) -> (String, NSDictionary)?
-    {
-        let contentPath = applicationRootPath(byUUID: uuid, rootPath: rootPath)
-    
-        let applicationDataPropertiesPath = contentPath.appending(".com.apple.mobile_container_manager.metadata.plist")
-
-        guard let dictionary = NSDictionary(contentsOfFile: applicationDataPropertiesPath) else
-        {
-            return nil
-        }
-    
-        return (contentPath, dictionary)
     }
     
     //----------------------------------------------------------------------------
@@ -191,13 +183,7 @@ struct Application
             let applicationRootBundlePath =
                     simulatorRootPath.appendingFormat("data/Containers/Bundle/Application/%@/", appBundleUUID)
 
-            let applicationBundlePropertiesPath =
-                    applicationRootBundlePath.appending(".com.apple.mobile_container_manager.metadata.plist")
-
-            let applicationBundleProperties =
-                NSDictionary(contentsOfFile: applicationBundlePropertiesPath)
-
-            let bundleIdentifier = applicationBundleProperties?["MCMMetadataIdentifier"] as? String
+            let bundleIdentifier = Tools.containerIdentifier(uuid: appBundleUUID as String, atPath: applicationRootBundlePath)
 
             if bundleIdentifier == applicationBundleIdentifier
             {

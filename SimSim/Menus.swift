@@ -24,9 +24,8 @@ class Menus: NSObject
         item.target = Actions.self
         item.representedObject = path
         
-        item.image = NSWorkspace.shared.icon(forFile: iconPath)
-        item.image?.size = NSMakeSize(CGFloat(Constants.iconSize), CGFloat(Constants.iconSize))
-        
+        item.image = Menus.fileIcon(forPath: iconPath)
+
         submenu.addItem(item)
         
         return NSNumber(value: hotkey.intValue + 1)
@@ -46,6 +45,24 @@ class Menus: NSObject
         return NSNumber(value: hotkey.intValue + 1)
     }
 
+    private static var fileIconCache: [String: (modificationDate: Date?, icon: NSImage)] = [:]
+
+    //----------------------------------------------------------------------------
+    class func fileIcon(forPath path: String) -> NSImage
+    {
+        let modificationDate = try? URL(fileURLWithPath: path).resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+
+        if let cached = fileIconCache[path], cached.modificationDate == modificationDate
+        {
+            return cached.icon
+        }
+
+        let icon = NSWorkspace.shared.icon(forFile: path)
+        icon.size = NSMakeSize(CGFloat(Constants.iconSize), CGFloat(Constants.iconSize))
+        fileIconCache[path] = (modificationDate, icon)
+        return icon
+    }
+
     //----------------------------------------------------------------------------
     class func realmModule() -> Realm
     {
@@ -61,8 +78,7 @@ class Menus: NSObject
             return hotkey
         }
         
-        let icon = NSWorkspace.shared.icon(forFile: Realm.applicationPath())
-        icon.size = NSMakeSize(CGFloat(Constants.iconSize), CGFloat(Constants.iconSize))
+        let icon = Menus.fileIcon(forPath: Realm.applicationPath())
         Realm.generateRealmMenu(forPath: path, for: menu, withHotKey: hotkey, icon: icon)
         return NSNumber(value: hotkey.intValue + 1)
     }

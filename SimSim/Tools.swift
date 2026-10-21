@@ -20,6 +20,82 @@ class Tools: NSObject
         static let fileType = "fileType"
     }
 
+    // 只在 main thread 存取；背景 preload 先建 local dict 再 dispatch 回 main merge
+    private static var identifierCache: [String: String] = [:]
+
+    //----------------------------------------------------------------------------
+    class func readContainerIdentifier(atPath containerPath: String) -> String?
+    {
+        let plistPath = containerPath + ".com.apple.mobile_container_manager.metadata.plist"
+        guard let plistData = try? Data(contentsOf: URL(fileURLWithPath: plistPath)),
+              let metadata = try? PropertyListSerialization.propertyList(from: plistData, options: [], format: nil) as? [String: Any],
+              let identifier = metadata["MCMMetadataIdentifier"] as? String else
+        {
+            return nil
+        }
+
+        return identifier
+    }
+
+    //----------------------------------------------------------------------------
+    class func containerIdentifier(uuid: String, atPath containerPath: String) -> String?
+    {
+        dispatchPrecondition(condition: .onQueue(.main))
+
+        if let cached = identifierCache[uuid]
+        {
+            return cached
+        }
+
+        guard let identifier = readContainerIdentifier(atPath: containerPath) else
+        {
+            return nil
+        }
+
+        if identifierCache.count > 20_000
+        {
+            identifierCache.removeAll()
+        }
+
+        identifierCache[uuid] = identifier
+        return identifier
+    }
+
+    //----------------------------------------------------------------------------
+    class func preloadIdentifierCache()
+    {
+        let simulators = activeSimulators()
+            .sorted { $0.date > $1.date }
+            .prefix(Constants.maxRecentSimulators)
+
+        let folders = ["data/Containers/Data/Application/",
+                       "data/Containers/Shared/AppGroup/",
+                       "data/Containers/Data/PluginKitPlugin/",
+                       "data/Containers/Bundle/Application/"]
+
+        var local: [String: String] = [:]
+
+        for simulator in simulators
+        {
+            for folder in folders
+            {
+                let basePath = simulator.path + folder
+                for uuid in allFilesAt(path: basePath) where uuid != Constants.Other.dsStore
+                {
+                    if let identifier = readContainerIdentifier(atPath: basePath + uuid + "/")
+                    {
+                        local[uuid] = identifier
+                    }
+                }
+            }
+        }
+
+        DispatchQueue.main.async
+        {
+            identifierCache.merge(local) { current, _ in current }
+        }
+    }
+
     //----------------------------------------------------------------------------
     class func homeDirectoryPath() -> String
     {
@@ -84,43 +160,15 @@ class Tools: NSObject
     }
 
     //----------------------------------------------------------------------------
-    class func validApplication(_ application: Application) -> Bool
-    {
-        guard application.bundleName != nil else
-        {
-            return false
-        }
-
-        guard application.version != nil else
-        {
-            return false
-        }
-
-        guard !application.isAppleApplication else
-        {
-            return false
-        }
-        
-        return true
-    }
-    
-    //----------------------------------------------------------------------------
     class func installedApps(on simulator: Simulator) -> [Application]
     {
         let installedApplicationsDataPath = simulator.path + ("data/Containers/Data/Application/")
         let installedApplications = Tools.getSortedFiles(fromFolder: installedApplicationsDataPath)
         
-        let userApplications = installedApplications
-            .compactMap
-            {
-                Application(dictionary: $0, simulator: simulator)
-            }
-            .filter
-            {
-                !$0.isAppleApplication
-            }
-
-        return userApplications
+        return installedApplications.compactMap
+        {
+            Application(dictionary: $0, simulator: simulator)
+        }
     }
 
     //----------------------------------------------------------------------------
@@ -187,26 +235,31 @@ class Tools: NSObject
     //----------------------------------------------------------------------------
     class func getFiles(fromFolder folderPath: String) -> [NSDictionary]
     {
-        let files = allFilesAt(path: folderPath)
+        let keys: [URLResourceKey] = [.contentModificationDateKey, .fileResourceTypeKey]
+        let urls = (try? FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath: folderPath),
+                                                                 includingPropertiesForKeys: keys,
+                                                                 options: [])) ?? []
         var filesAndProperties: [NSDictionary] = []
-        
-        for file in files
+
+        for url in urls
         {
+            let file = url.lastPathComponent
             if !(file == Constants.Other.dsStore)
             {
-                let filePath = folderPath + "/" + file
-                let properties = try? FileManager.default.attributesOfItem(atPath: filePath)
-                let modificationDate = properties![.modificationDate] as! Date
-                let fileType = properties![.type] as! String
-                
+                guard let values = try? url.resourceValues(forKeys: Set(keys)),
+                      let modificationDate = values.contentModificationDate else
+                {
+                    continue
+                }
+
                 filesAndProperties.append([
                     Keys.fileName : file,
                     Keys.fileDate : modificationDate,
-                    Keys.fileType : fileType
+                    Keys.fileType : values.fileResourceType?.rawValue ?? ""
                 ])
             }
         }
-        
+
         return filesAndProperties
     }
     
@@ -221,19 +274,12 @@ class Tools: NSObject
     {
         let filesAndProperties = getFiles(fromFolder: folderPath)
         
-        let sortedFiles = filesAndProperties.sorted(by:
-        {
-            path1, path2 in
-            
-            guard let date1 = path1[Keys.fileDate] as? Date,
-                  let date2 = path2[Keys.fileDate] as? Date else
-            {
-                return false
-            }
-            
-            return date1 < date2
-        })
-        
+        // 先取出 Date 再排，避免 comparator 內反覆做 NSDictionary -> Date 的 bridging cast
+        let sortedFiles = filesAndProperties
+            .map { ($0[Keys.fileDate] as? Date ?? Date.distantPast, $0) }
+            .sorted { $0.0 < $1.0 }
+            .map { $0.1 }
+
         return sortedFiles
     }
     
